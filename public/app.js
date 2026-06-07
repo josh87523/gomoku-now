@@ -1,4 +1,5 @@
 const socket = io();
+const appConfig = window.__APP_CONFIG__ || {};
 
 const state = {
   room: null,
@@ -79,7 +80,7 @@ function isMyTurn(room) {
 }
 
 function inviteUrl(code) {
-  const url = new URL(window.location.href);
+  const url = new URL(appConfig.publicBaseUrl || window.location.href);
   url.searchParams.set("room", code);
   return url.toString();
 }

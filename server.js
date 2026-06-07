@@ -13,7 +13,16 @@ const RECONNECT_GRACE_MS = 1000 * 60 * 3;
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
+const publicBaseUrl = process.env.PUBLIC_BASE_URL || "";
 
+app.get("/app-config.js", (_req, res) => {
+  res.type("application/javascript");
+  res.send(
+    `window.__APP_CONFIG__ = ${JSON.stringify({
+      publicBaseUrl
+    })};`
+  );
+});
 app.use(express.static(path.join(__dirname, "public")));
 
 const rooms = new Map();
