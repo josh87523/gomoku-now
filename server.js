@@ -56,7 +56,9 @@ function createRoom(hostName) {
     winner: null,
     winLine: [],
     lastMove: null,
+    moveHistory: [],
     rematchVotes: new Set(),
+    undoRequest: null,
     players: {
       black: { id: null, name: hostName, connected: false, lastSeenAt: null },
       white: { id: null, name: "等待加入", connected: false, lastSeenAt: null }
@@ -76,6 +78,8 @@ function cloneState(room, viewerRole = null) {
     winner: room.winner,
     winLine: room.winLine,
     lastMove: room.lastMove,
+    moveHistoryLength: room.moveHistory.length,
+    undoRequest: room.undoRequest,
     yourRole: viewerRole,
     players: {
       black: { name: room.players.black.name, connected: room.players.black.connected },
@@ -101,9 +105,28 @@ function resetBoard(room, status = "ready") {
   room.winner = null;
   room.winLine = [];
   room.lastMove = null;
+  room.moveHistory = [];
   room.status = status;
   room.rematchVotes.clear();
+  room.undoRequest = null;
   room.updatedAt = Date.now();
+}
+
+function rollbackOneMove(room) {
+  const move = room.moveHistory.pop();
+  if (!move) {
+    return false;
+  }
+
+  room.board[move.row][move.col] = null;
+  room.currentTurn = move.role;
+  room.lastMove = room.moveHistory.length ? room.moveHistory[room.moveHistory.length - 1] : null;
+  room.winner = null;
+  room.winLine = [];
+  room.status = "playing";
+  room.undoRequest = null;
+  room.updatedAt = Date.now();
+  return true;
 }
 
 function findRoomBySocket(socketId) {
@@ -291,6 +314,8 @@ io.on("connection", (socket) => {
 
     room.board[row][col] = role;
     room.lastMove = { row, col, role };
+    room.moveHistory.push({ row, col, role });
+    room.undoRequest = null;
     room.updatedAt = Date.now();
 
     const winLine = hasFive(room, row, col, role);
@@ -325,6 +350,38 @@ io.on("connection", (socket) => {
     if (room.rematchVotes.size === 2) {
       resetBoard(room, "playing");
     }
+    emitRoomState(room);
+  });
+
+  socket.on("game:undo", () => {
+    const found = findRoomBySocket(socket.id);
+    if (!found) {
+      return;
+    }
+
+    const { room, role } = found;
+    if (room.status !== "playing") {
+      socket.emit("action:error", "当前只有对局中才能悔棋");
+      return;
+    }
+    if (room.moveHistory.length === 0) {
+      socket.emit("action:error", "现在还没有可悔的棋");
+      return;
+    }
+
+    if (!room.undoRequest) {
+      room.undoRequest = { requester: role };
+      room.updatedAt = Date.now();
+      emitRoomState(room);
+      return;
+    }
+
+    if (room.undoRequest.requester === role) {
+      socket.emit("action:error", "已经发出悔棋申请，等对方同意");
+      return;
+    }
+
+    rollbackOneMove(room);
     emitRoomState(room);
   });
 

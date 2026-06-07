@@ -251,7 +251,7 @@ button.primary {
   grid-template-columns: repeat(25, var(--cell));
   grid-template-rows: repeat(25, var(--cell));
   width: max-content;
-  padding: 18px;
+  padding: calc(var(--cell) / 2);
   border-radius: 22px;
   background:
     linear-gradient(to right, transparent calc(var(--cell) / 2 - 1px), rgba(110, 79, 52, 0.55) calc(var(--cell) / 2 - 1px), rgba(110, 79, 52, 0.55) calc(var(--cell) / 2 + 1px), transparent calc(var(--cell) / 2 + 1px)),
@@ -265,6 +265,15 @@ button.primary {
   position: relative;
   width: var(--cell);
   height: var(--cell);
+  display: block;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  box-shadow: none;
 }
 
 .cell::after {
@@ -284,6 +293,12 @@ button.primary {
   opacity: 0.28;
   transform: translate(-50%, -50%) scale(1);
   background: rgba(36, 22, 12, 0.28);
+}
+
+.cell:focus-visible {
+  outline: 2px solid rgba(208, 90, 45, 0.5);
+  outline-offset: -2px;
+  border-radius: 50%;
 }
 
 .cell.black::after,

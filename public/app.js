@@ -3,7 +3,8 @@ const appConfig = window.__APP_CONFIG__ || {};
 
 const state = {
   room: null,
-  lastErrorAt: 0
+  lastErrorAt: 0,
+  cells: []
 };
 
 const refs = {
@@ -19,6 +20,8 @@ const refs = {
   copyLinkBtn: document.querySelector("#copyLinkBtn"),
   startBtn: document.querySelector("#startBtn"),
   rematchBtn: document.querySelector("#rematchBtn"),
+  undoBtn: document.querySelector("#undoBtn"),
+  undoAcceptBtn: document.querySelector("#undoAcceptBtn"),
   blackPlayerText: document.querySelector("#blackPlayerText"),
   whitePlayerText: document.querySelector("#whitePlayerText"),
   statusText: document.querySelector("#statusText"),
@@ -85,15 +88,38 @@ function inviteUrl(code) {
   return url.toString();
 }
 
+function ensureBoard() {
+  if (state.cells.length) {
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  for (let row = 0; row < 25; row += 1) {
+    for (let col = 0; col < 25; col += 1) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "cell";
+      button.dataset.row = String(row);
+      button.dataset.col = String(col);
+      state.cells.push(button);
+      fragment.appendChild(button);
+    }
+  }
+  refs.board.appendChild(fragment);
+}
+
 function renderBoard(room) {
-  refs.board.innerHTML = "";
+  ensureBoard();
   const winSet = new Set((room.winLine || []).map(([r, c]) => `${r}:${c}`));
 
   for (let row = 0; row < room.boardSize; row += 1) {
     for (let col = 0; col < room.boardSize; col += 1) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = `cell ${boardCellClass(room.board[row][col])}`;
+      const button = state.cells[row * room.boardSize + col];
+      button.className = "cell";
+      const roleClass = boardCellClass(room.board[row][col]);
+      if (roleClass) {
+        button.classList.add(roleClass);
+      }
 
       if (room.lastMove && room.lastMove.row === row && room.lastMove.col === col) {
         button.classList.add("last-move");
@@ -104,14 +130,6 @@ function renderBoard(room) {
       if (!room.board[row][col] && isMyTurn(room)) {
         button.classList.add("playable");
       }
-
-      button.addEventListener("click", () => {
-        if (!state.room || !isMyTurn(state.room) || state.room.board[row][col]) {
-          return;
-        }
-        socket.emit("move:play", { row, col });
-      });
-      refs.board.appendChild(button);
     }
   }
 }
@@ -128,13 +146,23 @@ function renderRoom(room) {
   refs.inviteLinkInput.value = inviteUrl(room.code);
   refs.startBtn.disabled = !(room.canStart && room.status !== "playing");
   refs.rematchBtn.disabled = room.status !== "finished";
+  refs.undoBtn.disabled = room.status !== "playing" || !room.moveHistoryLength;
+  refs.undoAcceptBtn.disabled = !(room.undoRequest && room.undoRequest.requester !== room.yourRole);
 
   if (room.status === "waiting") {
     showStatus("房间已创建，等你妹用链接进来。");
   } else if (room.status === "ready") {
     showStatus(room.canStart ? "两位玩家都已就位，点“开始对局”。" : "等待玩家回到房间。");
   } else if (room.status === "playing") {
-    showStatus(isMyTurn(room) ? "轮到你落子。" : `轮到${roleLabel(room.currentTurn)}落子。`);
+    if (room.undoRequest) {
+      if (room.undoRequest.requester === room.yourRole) {
+        showStatus("已发出悔棋申请，等对方同意。");
+      } else {
+        showStatus(`${roleLabel(room.undoRequest.requester)}申请悔棋，你可以点“同意悔棋”。`);
+      }
+    } else {
+      showStatus(isMyTurn(room) ? "轮到你落子。" : `轮到${roleLabel(room.currentTurn)}落子。`);
+    }
   } else if (room.status === "finished") {
     if (room.winner === "draw") {
       showStatus("平局，再来一局吧。");
@@ -176,6 +204,29 @@ refs.startBtn.addEventListener("click", () => {
 
 refs.rematchBtn.addEventListener("click", () => {
   socket.emit("game:rematch");
+});
+
+refs.undoBtn.addEventListener("click", () => {
+  socket.emit("game:undo");
+});
+
+refs.undoAcceptBtn.addEventListener("click", () => {
+  socket.emit("game:undo");
+});
+
+refs.board.addEventListener("click", (event) => {
+  const target = event.target.closest(".cell");
+  if (!target || !state.room || !isMyTurn(state.room)) {
+    return;
+  }
+
+  const row = Number(target.dataset.row);
+  const col = Number(target.dataset.col);
+  if (!Number.isInteger(row) || !Number.isInteger(col) || state.room.board[row][col]) {
+    return;
+  }
+
+  socket.emit("move:play", { row, col });
 });
 
 refs.copyLinkBtn.addEventListener("click", async () => {
