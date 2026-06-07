@@ -18,6 +18,36 @@ sock.close()
 PY
 }
 
+start_server() {
+  (
+    cd "$ROOT_DIR"
+    exec env PORT="$PORT" PUBLIC_BASE_URL="$1" node server.js >"$SERVER_LOG" 2>&1
+  ) &
+  SERVER_PID=$!
+}
+
+wait_for_http() {
+  local url="$1"
+  for _ in $(seq 1 40); do
+    if curl -fsS "$url" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.25
+  done
+  return 1
+}
+
+wait_for_port_free() {
+  local port="$1"
+  for _ in $(seq 1 40); do
+    if ! lsof -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.25
+  done
+  return 1
+}
+
 if lsof -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
   PORT="$(find_free_port)"
 fi
@@ -30,11 +60,7 @@ fi
 
 rm -f "$TUNNEL_LOG" "$SERVER_LOG"
 
-(
-  cd "$ROOT_DIR"
-  PORT="$PORT" PUBLIC_BASE_URL="http://127.0.0.1:${PORT}" node server.js >"$SERVER_LOG" 2>&1
-) &
-SERVER_PID=$!
+start_server "http://127.0.0.1:${PORT}"
 
 cleanup() {
   kill "$SERVER_PID" >/dev/null 2>&1 || true
@@ -44,7 +70,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
-sleep 1
+wait_for_http "http://127.0.0.1:${PORT}/app-config.js" || {
+  echo "local server did not become ready"
+  cat "$SERVER_LOG"
+  exit 1
+}
 
 "$CLOUDFLARED_BIN" tunnel --protocol http2 --url "http://127.0.0.1:${PORT}" >"$TUNNEL_LOG" 2>&1 &
 TUNNEL_PID=$!
@@ -66,14 +96,26 @@ fi
 
 kill "$SERVER_PID" >/dev/null 2>&1 || true
 wait "$SERVER_PID" 2>/dev/null || true
+wait_for_port_free "$PORT" || {
+  echo "port $PORT did not free up after restarting server"
+  cat "$SERVER_LOG"
+  exit 1
+}
 
-(
-  cd "$ROOT_DIR"
-  PORT="$PORT" PUBLIC_BASE_URL="$URL" node server.js >"$SERVER_LOG" 2>&1
-) &
-SERVER_PID=$!
+start_server "$URL"
 
-sleep 1
+wait_for_http "http://127.0.0.1:${PORT}/app-config.js" || {
+  echo "public-base server did not become ready"
+  cat "$SERVER_LOG"
+  exit 1
+}
+
+if ! grep -q "$URL" <(curl -fsS "http://127.0.0.1:${PORT}/app-config.js"); then
+  echo "server app-config did not pick up the public url"
+  curl -fsS "http://127.0.0.1:${PORT}/app-config.js"
+  exit 1
+fi
+
 echo "$URL"
 echo "server log: $SERVER_LOG"
 echo "tunnel log: $TUNNEL_LOG"
