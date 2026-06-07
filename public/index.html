@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>马上开玩五子棋</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">远程联机 · 25×25</p>
+          <h1>马上开玩五子棋</h1>
+          <p class="subtitle">创建房间，把链接发给你妹，双方打开同一局就能下。</p>
+        </div>
+        <div class="hero-chip" id="connectionState">未连接</div>
+      </header>
+
+      <main class="layout">
+        <section class="control-panel">
+          <div class="card">
+            <label class="field">
+              <span>你的昵称</span>
+              <input id="nameInput" maxlength="24" placeholder="比如：哥哥" />
+            </label>
+            <div class="actions">
+              <button id="createRoomBtn" class="primary">创建房间</button>
+              <button id="joinRoomBtn">加入房间</button>
+            </div>
+            <label class="field">
+              <span>房间号</span>
+              <input id="roomCodeInput" maxlength="6" placeholder="输入 6 位房间号" />
+            </label>
+          </div>
+
+          <div class="card" id="roomCard">
+            <div class="card-title-row">
+              <h2>房间信息</h2>
+              <span id="roomBadge" class="badge">未入房</span>
+            </div>
+            <div class="room-grid">
+              <div>
+                <div class="meta-label">房间号</div>
+                <div class="meta-value" id="roomCodeText">-</div>
+              </div>
+              <div>
+                <div class="meta-label">你的执子</div>
+                <div class="meta-value" id="yourRoleText">-</div>
+              </div>
+            </div>
+            <div class="invite-box">
+              <input id="inviteLinkInput" readonly placeholder="创建后显示邀请链接" />
+              <button id="copyLinkBtn">复制链接</button>
+            </div>
+            <div class="actions">
+              <button id="startBtn" class="primary" disabled>开始对局</button>
+              <button id="rematchBtn" disabled>再来一局</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>对局状态</h2>
+            <div class="status-stack">
+              <div class="player-row">
+                <div class="stone black"></div>
+                <span id="blackPlayerText">黑方：等待中</span>
+              </div>
+              <div class="player-row">
+                <div class="stone white"></div>
+                <span id="whitePlayerText">白方：等待中</span>
+              </div>
+              <p id="statusText" class="status-text">先创建或加入一个房间。</p>
+              <p class="hint">胜负规则：任意方向先连成 5 子获胜。</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="board-panel">
+          <div class="board-card">
+            <div class="board-scroll">
+              <div id="board" class="board"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/app.js"></script>
+  </body>
+  </html>
